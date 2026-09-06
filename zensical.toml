@@ -2,6 +2,9 @@
 site_name = "PeriPage P21"
 site_description = "Reverse-engineering the PeriPage P21 protocol, and two clean-room clients for it"
 site_url = "https://peripage-p21.pages.dev/"
+repo_url = "https://github.com/Techbrunch/peripage-p21"
+repo_name = "Techbrunch/peripage-p21"
+edit_uri = "edit/main/docs/"
 
 # docs_dir defaults to "docs", site_dir to "site".
 
@@ -17,6 +20,7 @@ nav = [
 [project.theme]
 language = "en"
 features = [
+  "content.action.edit",
   "content.code.annotate",
   "content.code.copy",
   "content.code.select",
