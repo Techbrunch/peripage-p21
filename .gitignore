@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+*.pyc
+site/
+.cache/
+
+# Cloudflare. .wrangler/ is wrangler's own scratch dir: it caches the account id
+# and account name (an email address) and, for Workers, local binding state. It is
+# regenerated on every deploy -- nothing in it belongs in git.
+.wrangler/
+# Never committed even though this project has none today: wrangler reads local
+# secrets from these, and one careless `git add -A` is all it takes.
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+
+# PeriPage's proprietary APK. 170 MB (over GitHub's 100 MB file limit) and not
+# ours to redistribute -- docs/00-setup-and-recon.md says where to get it.
+*.xapk
+*.apk
+
+.DS_Store

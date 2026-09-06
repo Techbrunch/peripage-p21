@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PeriPage P21</title>
+<style>
+:root{
+  --bg:#f6f6f4; --panel:#fff; --ink:#1a1a18; --muted:#6b6b66; --line:#e2e2dd;
+  --accent:#2f6f4f; --accent-ink:#fff; --warn:#b4471f; --ok:#2f6f4f; --radius:10px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --bg:#16161a; --panel:#1e1e23; --ink:#ececea; --muted:#9a9a95; --line:#31313a;
+  --accent:#5aa87c; --accent-ink:#11150f; --warn:#e8845c; --ok:#5aa87c;
+}}
+:root[data-theme=dark]{
+  --bg:#16161a; --panel:#1e1e23; --ink:#ececea; --muted:#9a9a95; --line:#31313a;
+  --accent:#5aa87c; --accent-ink:#11150f; --warn:#e8845c; --ok:#5aa87c;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+h1{font-size:19px;margin:0;letter-spacing:-.01em}
+h1 span{color:var(--muted);font-weight:400}
+.grow{flex:1}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+  padding:8px 14px;border-radius:var(--radius);cursor:pointer}
+button:hover:not(:disabled){border-color:var(--muted)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:600}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:7px}
+.dot.on{background:var(--ok)} .dot.err{background:var(--warn)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px}
+@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);
+  margin:0 0 12px;font-weight:600}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tabs button{padding:6px 14px;border-radius:999px}
+.tabs button[aria-selected=true]{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+textarea,input[type=text],select{width:100%;font:inherit;padding:9px 11px;border-radius:var(--radius);
+  border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+textarea{min-height:150px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+label{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px}
+.row{display:flex;gap:10px;align-items:center}
+.row>*{flex:1}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.preview{border:1px solid var(--line);border-radius:var(--radius);background:#fff;
+  padding:10px;overflow-x:auto;display:flex;justify-content:center;align-items:flex-start}
+/* align-items:flex-start matters: the default stretch squashes the canvas to the
+   box height, so a long job renders distorted instead of tall. The box grows with
+   the job -- the preview is the paper, so its length is the point. */
+.preview canvas{image-rendering:pixelated;max-width:100%;height:auto;flex:none}
+.meta{font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:600}
+#log{font:11px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);
+  border:1px solid var(--line);border-radius:var(--radius);padding:9px;height:130px;
+  overflow:auto;white-space:pre-wrap;color:var(--muted)}
+.evt{color:var(--warn);font-weight:600}
+.drop{border:1.5px dashed var(--line);border-radius:var(--radius);padding:26px;text-align:center;
+  color:var(--muted);cursor:pointer}
+.drop.over{border-color:var(--accent);color:var(--accent)}
+.note{font-size:12px;color:var(--muted);margin-top:10px}
+.bar{height:5px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:10px}
+.bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
+.hide{display:none!important}
+.warnbox{border:1px solid var(--warn);color:var(--warn);border-radius:var(--radius);
+  padding:12px;margin-bottom:16px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>PeriPage <span>P21</span></h1>
+    <div class="grow"></div>
+    <span class="meta"><i class="dot" id="dot"></i><span id="devname">not connected</span></span>
+    <button class="primary" id="btnConn">Connect</button>
+    <button id="btnDisc" disabled>Disconnect</button>
+  </header>
+
+  <div class="warnbox hide" id="unsupported">
+    This browser has no Web Bluetooth. Use Chrome or Edge on desktop or Android,
+    over <b>https</b> or <b>localhost</b>.
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <div class="tabs" role="tablist">
+          <button role="tab" id="tabText"  aria-selected="true">Text</button>
+          <button role="tab" id="tabImage" aria-selected="false">Image</button>
+        </div>
+
+        <div id="paneText">
+          <textarea id="txt" spellcheck="false">PeriPage P21
+
+Printed from a web page over
+Bluetooth LE — no app, no server.
+
+Protocol reverse-engineered from
+the Android APK.</textarea>
+          <div class="row">
+            <div><label>Font size</label><input type="range" id="fsize" min="12" max="64" value="28"></div>
+            <div><label>Align</label>
+              <select id="align"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></div>
+          </div>
+          <div class="row">
+            <div><label>Font</label>
+              <select id="font">
+                <option value="ui-sans-serif,system-ui,sans-serif">Sans</option>
+                <option value="Georgia,serif">Serif</option>
+                <option value="ui-monospace,Menlo,monospace">Mono</option>
+              </select></div>
+            <div><label><input type="checkbox" id="bold"> Bold</label>
+              <label><input type="checkbox" id="wrap" checked> Wrap long lines</label></div>
+          </div>
+        </div>
+
+        <div id="paneImage" class="hide">
+          <div class="drop" id="drop">Drop an image here, or click to choose</div>
+          <input type="file" id="file" accept="image/*" class="hide">
+          <div class="row">
+            <div><label>Mode</label>
+              <select id="mode">
+                <option value="sketch">Sketch — line art, logos (best default)</option>
+                <option value="photo">Photo — dithered, for photographs</option>
+                <option value="text">Text — hard threshold</option>
+              </select></div>
+          </div>
+          <div class="row">
+            <div><label>Brightness <span id="brVal" class="meta">0</span></label>
+              <input type="range" id="bright" min="-100" max="100" value="0"></div>
+            <div><label>Contrast <span id="ctVal" class="meta">0</span></label>
+              <input type="range" id="contrast" min="-100" max="100" value="0"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2>Preview <span class="meta" id="dims"></span></h2>
+        <div class="preview"><canvas id="prev"></canvas></div>
+        <div class="meta" id="info" style="margin-top:9px"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Printer</h2>
+        <div class="meta" id="devinfo">—</div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2>Print</h2>
+        <label>Density <span class="meta" id="dVal">normal</span></label>
+        <input type="range" id="density" min="0" max="2" value="1">
+        <label>Copies <span class="meta" id="cVal">1</span></label>
+        <input type="range" id="copies" min="1" max="5" value="1">
+        <div class="bar"><i id="prog"></i></div>
+        <div style="margin-top:12px" class="row">
+          <button class="primary" id="btnPrint" disabled>Print</button>
+          <button id="btnFeed" disabled>Feed</button>
+        </div>
+        <div class="note">Density 0–2 maps to wire 0/2/4 — the P21 saturates at 4.</div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2>Log</h2>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { P21, convert } from './app.js';
+
+const $ = s => document.querySelector(s);
+const dev = new P21();
+let current = null;        // {data,bits,w,h,info}
+let imgEl = null;
+let tab = 'text';
+
+if (!navigator.bluetooth) $('#unsupported').classList.remove('hide');
+
+function log(msg, cls) {
+  const el = $('#log');
+  const t = new Date().toLocaleTimeString();
+  el.innerHTML += `<div${cls ? ` class="${cls}"` : ''}>${t}  ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+dev.onstatus = (name, fault) => log(`⚑ ${name}`, fault ? 'evt' : '');
+
+/* ---------------- rendering ---------------- */
+// Greedy word wrap at the printer's pixel width. A word wider than the line is
+// broken character-wise, so nothing can run off the right edge whatever the font
+// size -- unwrapped text is simply clipped by the paper, with no warning.
+function wrapLines(x, text, maxW) {
+  const out = [];
+  for (const para of text.split('\n')) {
+    if (!para.trim()) { out.push(''); continue; }
+    let line = '';
+    for (const word of para.split(/\s+/).filter(Boolean)) {
+      const trial = line ? line + ' ' + word : word;
+      if (x.measureText(trial).width <= maxW) { line = trial; continue; }
+      if (line) { out.push(line); line = ''; }
+      if (x.measureText(word).width <= maxW) { line = word; continue; }
+      let chunk = '';
+      for (const ch of word) {
+        if (chunk && x.measureText(chunk + ch).width > maxW) { out.push(chunk); chunk = ''; }
+        chunk += ch;
+      }
+      line = chunk;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+function renderText() {
+  const w = dev.width || 384;
+  const size = +$('#fsize').value, font = $('#font').value, bold = $('#bold').checked;
+  const align = $('#align').value;
+  const lh = Math.round(size * 1.35), pad = 6;
+  const spec = `${bold ? '700 ' : ''}${size}px ${font}`;
+  const c = document.createElement('canvas');
+  const x = c.getContext('2d');
+  x.font = spec;                                     // measure before resizing
+  const lines = $('#wrap').checked
+    ? wrapLines(x, $('#txt').value, w - pad * 2)
+    : $('#txt').value.split('\n');
+  c.width = w; c.height = Math.max(lh * lines.length + pad * 2, 32);
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.fillStyle = '#000';
+  x.font = spec;                                     // resizing resets the context
+  x.textBaseline = 'top'; x.textAlign = align;
+  const px = align === 'center' ? w / 2 : align === 'right' ? w - pad : pad;
+  lines.forEach((ln, i) => x.fillText(ln, px, pad + i * lh));
+  return x.getImageData(0, 0, c.width, c.height);
+}
+
+function renderImage() {
+  if (!imgEl) return null;
+  const w = dev.width || 384;
+  const h = Math.max(1, Math.round(imgEl.naturalHeight * w / imgEl.naturalWidth));
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, w, h);
+  const b = +$('#bright').value, ct = +$('#contrast').value;
+  if (b || ct) x.filter = `brightness(${100 + b}%) contrast(${100 + ct}%)`;
+  x.drawImage(imgEl, 0, 0, w, h);
+  return x.getImageData(0, 0, w, h);
+}
+
+function update() {
+  const src = tab === 'text' ? renderText() : renderImage();
+  if (!src) { current = null; $('#dims').textContent = ''; $('#info').textContent = ''; return; }
+  const mode = tab === 'text' ? 'text' : $('#mode').value;
+  current = convert(src, mode);
+  const { w, h, bits, info } = current;
+  const c = $('#prev'); c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const out = g.createImageData(w, h);
+  for (let i = 0; i < w * h; i++) {
+    const v = bits[i] ? 0 : 255;
+    out.data[i*4] = out.data[i*4+1] = out.data[i*4+2] = v; out.data[i*4+3] = 255;
+  }
+  g.putImageData(out, 0, 0);
+  let black = 0; for (const b of bits) black += b;
+  $('#dims').textContent = `${w} × ${h} px · ${(h/8).toFixed(1)} mm`;
+  $('#info').textContent = Object.entries(info).map(([k,v]) => `${k}=${v}`).join('  ') +
+    `  black=${(100*black/(w*h)).toFixed(1)}%  ${current.data.length} B`;
+}
+
+/* ---------------- wiring ---------------- */
+for (const id of ['#txt','#fsize','#align','#font','#bold','#wrap','#mode','#bright','#contrast'])
+  $(id).addEventListener('input', () => {
+    $('#brVal').textContent = $('#bright').value;
+    $('#ctVal').textContent = $('#contrast').value;
+    update();
+  });
+
+$('#tabText').onclick  = () => { tab='text';  $('#tabText').ariaSelected='true';  $('#tabImage').ariaSelected='false';
+  $('#paneText').classList.remove('hide'); $('#paneImage').classList.add('hide'); update(); };
+$('#tabImage').onclick = () => { tab='image'; $('#tabImage').ariaSelected='true'; $('#tabText').ariaSelected='false';
+  $('#paneImage').classList.remove('hide'); $('#paneText').classList.add('hide'); update(); };
+
+$('#drop').onclick = () => $('#file').click();
+$('#file').onchange = e => e.target.files[0] && loadImage(e.target.files[0]);
+$('#drop').addEventListener('dragover', e => { e.preventDefault(); $('#drop').classList.add('over'); });
+$('#drop').addEventListener('dragleave', () => $('#drop').classList.remove('over'));
+$('#drop').addEventListener('drop', e => {
+  e.preventDefault(); $('#drop').classList.remove('over');
+  const f = [...e.dataTransfer.files].find(f => f.type.startsWith('image/'));
+  if (f) loadImage(f);
+});
+function loadImage(file) {
+  const img = new Image();
+  img.onload = () => { imgEl = img; $('#drop').textContent = `${file.name} — ${img.naturalWidth}×${img.naturalHeight}`; update(); };
+  img.src = URL.createObjectURL(file);
+}
+
+$('#density').oninput = e => $('#dVal').textContent = ['light','normal','dark'][e.target.value];
+$('#copies').oninput  = e => $('#cVal').textContent = e.target.value;
+
+$('#btnConn').onclick = async () => {
+  try {
+    log('requesting device…');
+    const name = await dev.connect();
+    $('#dot').className = 'dot on';
+    $('#devname').textContent = name;
+    $('#btnConn').disabled = true;
+    for (const b of ['#btnDisc','#btnPrint','#btnFeed']) $(b).disabled = false;
+    log(`connected to ${name} — ${dev.width} dots wide`);
+    const info = (await dev.info()).split('|');
+    const bat  = await dev.battery();
+    $('#devinfo').innerHTML =
+      `<b>${info[0]||name}</b><br>firmware ${info[3]||'?'}<br>SN ${info[4]||'?'}<br>battery ${bat ?? info[5] ?? '?'}%`;
+    update();
+  } catch (e) { log('connect failed: ' + e.message, 'evt'); }
+};
+
+$('#btnDisc').onclick = () => { dev.disconnect(); };
+dev.onstatus = (name, fault) => {
+  log(`⚑ ${name}`, fault ? 'evt' : '');
+  if (name === 'disconnected') {
+    $('#dot').className = 'dot'; $('#devname').textContent = 'not connected';
+    $('#btnConn').disabled = false;
+    for (const b of ['#btnDisc','#btnPrint','#btnFeed']) $(b).disabled = true;
+  }
+};
+
+$('#btnFeed').onclick = async () => { await dev.feedDots(0x60); log('fed 96 dots (12 mm)'); };
+
+$('#btnPrint').onclick = async () => {
+  if (!current) { log('nothing to print', 'evt'); return; }
+  const n = +$('#copies').value;
+  $('#btnPrint').disabled = true;
+  try {
+    const ok = await dev.setDensity(+$('#density').value);
+    log(`density ${$('#density').value} → ${ok ? 'OK' : 'no ack'}`);
+    for (let i = 0; i < n; i++) {
+      const t0 = performance.now();
+      await dev.printRaster(current.data, current.w, current.h);
+      log(`copy ${i+1}/${n}: ${current.data.length} B in ${Math.round(performance.now()-t0)} ms`);
+      $('#prog').style.width = `${100*(i+1)/n}%`;
+      if (i < n - 1) await new Promise(r => setTimeout(r, 2200));  // let the engine drain
+    }
+    setTimeout(() => $('#prog').style.width = '0', 900);
+  } catch (e) { log('print failed: ' + e.message, 'evt'); }
+  $('#btnPrint').disabled = false;
+};
+
+update();
+</script>
+</body>
+</html>
