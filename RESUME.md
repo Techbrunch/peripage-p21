@@ -11,17 +11,21 @@ cd webapp && python3 -m http.server 8765 --bind 127.0.0.1
 
 ## Deploy
 
-Both the docs and the web app ship as one Cloudflare Pages project, `peripage-p21`:
+Docs and web app ship as one **Worker with static assets**, `peripage-p21` — not a
+Pages project. Pushing to `main` builds and deploys automatically (Workers Builds).
+
+* docs — <https://peripage-p21.meeseeks.workers.dev/>
+* web app — <https://peripage-p21.meeseeks.workers.dev/app/>  ← **the HTTPS origin the phone needs**
 
 ```bash
-./deploy.sh                # build docs + copy webapp -> site/app/, then upload
-./deploy.sh --build-only   # everything except the upload
+./build.sh                 # docs -> site/, webapp -> site/app/, sources -> site/ref/
+./deploy.sh                # build, then `wrangler deploy` -- publish without a push
 ```
 
-* docs — <https://peripage-p21.pages.dev/>
-* web app — <https://peripage-p21.pages.dev/app/>  ← **the HTTPS origin the phone needs**
-
-Needs `wrangler login` (OAuth, interactive) or `CLOUDFLARE_API_TOKEN` with *Pages: Edit*.
+`wrangler.jsonc` is what makes this work: it declares the assets dir as `./site`.
+Without it Workers Builds auto-detects, picks `webapp/`, and serves the app at `/`
+with no docs at all. The build command lives in the dashboard, not in the repo
+(Worker → Settings → Build): `python3 -m pip install -r requirements.txt && ./build.sh`.
 
 ## Docs site
 
@@ -60,7 +64,7 @@ modes and live preview, density, copies, feed, decoded status.
 
 1. **Check the layout on a real phone.** It collapses to one column below 820 px but
    has never been rendered on one. Now that it is on HTTPS at
-   <https://peripage-p21.pages.dev/app/> this is just: open it on an Android phone.
+   <https://peripage-p21.meeseeks.workers.dev/app/> this is just: open it on an Android phone.
    Android only — no iOS browser implements Web Bluetooth.
 2. Optional: inline `app.js` into `index.html` for a single self-contained file.
 

@@ -14,7 +14,7 @@ it, validated against real hardware (`PPG_P21_F530`, firmware `V4.04_SD`).
 
 | Code | Status |
 |---|---|
-| [`../webapp/`](https://peripage-p21.pages.dev/app/) | **web app over BLE — the recommended client.** Live at [peripage-p21.pages.dev/app/](https://peripage-p21.pages.dev/app/). Replaces the mobile app |
+| [`../webapp/`](https://peripage-p21.meeseeks.workers.dev/app/) | **web app over BLE — the recommended client.** Live at [peripage-p21.meeseeks.workers.dev/app/](https://peripage-p21.meeseeks.workers.dev/app/). Replaces the mobile app |
 | [`../ref/p21_iobt.py`](../ref/p21_iobt.py) | macOS Python client over Classic SPP. Hardware-verified |
 | [`../ref/p21_macos.py`](../ref/p21_macos.py) | pyserial variant. Only works if something else holds the RFCOMM link — see §5.1 |
 | [`../ref/peripage_p21.py`](../ref/peripage_p21.py) | Linux `AF_BLUETOOTH` variant. **Untested** |

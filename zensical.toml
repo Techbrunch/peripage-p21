@@ -1,7 +1,7 @@
 [project]
 site_name = "PeriPage P21"
 site_description = "Reverse-engineering the PeriPage P21 protocol, and two clean-room clients for it"
-site_url = "https://peripage-p21.pages.dev/"
+site_url = "https://peripage-p21.meeseeks.workers.dev/"
 repo_url = "https://github.com/Techbrunch/peripage-p21"
 repo_name = "Techbrunch/peripage-p21"
 edit_uri = "edit/main/docs/"

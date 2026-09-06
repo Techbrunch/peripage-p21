@@ -32,7 +32,7 @@ Web Bluetooth requires `https://` or `localhost`. Two consequences:
 * pointing a phone at `http://<your-mac-ip>:8765` does **not** work either — that is
   a plain-HTTP origin, so `navigator.bluetooth` is undefined.
 
-For phone testing you need real HTTPS. It is deployed at **[peripage-p21.pages.dev/app/](https://peripage-p21.pages.dev/app/)**
+For phone testing you need real HTTPS. It is deployed at **[peripage-p21.meeseeks.workers.dev/app/](https://peripage-p21.meeseeks.workers.dev/app/)**
 (Cloudflare Pages, `../deploy.sh`) — open that on an Android phone and it just works.
 For an unpublished change, `cloudflared tunnel --url http://localhost:8765`.
 
