@@ -153,6 +153,15 @@ the Android APK.</textarea>
 
       <div class="card" style="margin-top:16px">
         <h2>Print</h2>
+        <label>Paper</label>
+        <select id="paper">
+          <option value="1">Continuous roll</option>
+          <option value="2">Die-cut labels (gap)</option>
+        </select>
+        <div id="labelOpts" class="hide">
+          <label>Label pitch <span class="meta" id="lpVal">40 mm — 320 dots</span></label>
+          <input type="range" id="labelmm" min="10" max="120" value="40">
+        </div>
         <label>Density <span class="meta" id="dVal">normal</span></label>
         <input type="range" id="density" min="0" max="2" value="1">
         <label>Copies <span class="meta" id="cVal">1</span></label>
@@ -174,7 +183,7 @@ the Android APK.</textarea>
 </div>
 
 <script type="module">
-import { P21, convert } from './app.js';
+import { P21, convert, PAPER } from './app.js';
 
 const $ = s => document.querySelector(s);
 const dev = new P21();
@@ -254,9 +263,34 @@ function renderImage() {
   return x.getImageData(0, 0, w, h);
 }
 
+// 203 dpi = 8 dots/mm, measured on hardware (docs/04-hardware-validation.md §5.6).
+const DOTS_PER_MM = 8;
+const labelDots = () => Math.round(+$('#labelmm').value * DOTS_PER_MM);
+const paperKind = () => +$('#paper').value;
+
+/**
+ * Pad (or clip) a render to exactly one label pitch, so the preview is what one
+ * label will hold. Content is top-aligned on white, matching how the printer
+ * lays a job down from the gap mark.
+ */
+function fitToLabel(src, target) {
+  const c = document.createElement('canvas');
+  c.width = src.width; c.height = target;
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.putImageData(src, 0, 0);                  // clips naturally when src is taller
+  return x.getImageData(0, 0, c.width, c.height);
+}
+
 function update() {
-  const src = tab === 'text' ? renderText() : renderImage();
+  let src = tab === 'text' ? renderText() : renderImage();
   if (!src) { current = null; $('#dims').textContent = ''; $('#info').textContent = ''; return; }
+  let overflow = 0;
+  if (paperKind() === PAPER.label) {
+    const target = labelDots();
+    overflow = Math.max(0, src.height - target);
+    if (src.height !== target) src = fitToLabel(src, target);
+  }
   const mode = tab === 'text' ? 'text' : $('#mode').value;
   current = convert(src, mode);
   const { w, h, bits, info } = current;
@@ -269,9 +303,11 @@ function update() {
   }
   g.putImageData(out, 0, 0);
   let black = 0; for (const b of bits) black += b;
-  $('#dims').textContent = `${w} × ${h} px · ${(h/8).toFixed(1)} mm`;
+  $('#dims').textContent = `${w} × ${h} px · ${(h/DOTS_PER_MM).toFixed(1)} mm` +
+    (paperKind() === PAPER.label ? ' · one label' : '');
   $('#info').textContent = Object.entries(info).map(([k,v]) => `${k}=${v}`).join('  ') +
-    `  black=${(100*black/(w*h)).toFixed(1)}%  ${current.data.length} B`;
+    `  black=${(100*black/(w*h)).toFixed(1)}%  ${current.data.length} B` +
+    (overflow ? `  ⚠ ${(overflow/DOTS_PER_MM).toFixed(1)} mm clipped — raise the label pitch or shrink the content` : '');
 }
 
 /* ---------------- wiring ---------------- */
@@ -301,6 +337,15 @@ function loadImage(file) {
   img.onload = () => { imgEl = img; $('#drop').textContent = `${file.name} — ${img.naturalWidth}×${img.naturalHeight}`; update(); };
   img.src = URL.createObjectURL(file);
 }
+
+$('#paper').oninput = () => {
+  $('#labelOpts').classList.toggle('hide', paperKind() !== PAPER.label);
+  update();
+};
+$('#labelmm').oninput = () => {
+  $('#lpVal').textContent = `${$('#labelmm').value} mm — ${labelDots()} dots`;
+  update();
+};
 
 $('#density').oninput = e => $('#dVal').textContent = ['light','normal','dark'][e.target.value];
 $('#copies').oninput  = e => $('#cVal').textContent = e.target.value;
@@ -339,11 +384,19 @@ $('#btnPrint').onclick = async () => {
   const n = +$('#copies').value;
   $('#btnPrint').disabled = true;
   try {
+    // Paper mode first: it is fire-and-forget, while setDensity is the one
+    // synchronous command in the whole path and doubles as a liveness check.
+    const kind = paperKind(), dots = labelDots();
+    await dev.configurePaper(kind, dots);
+    log(kind === PAPER.label
+      ? `paper: die-cut, pitch ${$('#labelmm').value} mm (${dots} dots)`
+      : 'paper: continuous roll');
+
     const ok = await dev.setDensity(+$('#density').value);
     log(`density ${$('#density').value} → ${ok ? 'OK' : 'no ack'}`);
     for (let i = 0; i < n; i++) {
       const t0 = performance.now();
-      await dev.printRaster(current.data, current.w, current.h);
+      await dev.printRaster(current.data, current.w, current.h, { paper: kind });
       log(`copy ${i+1}/${n}: ${current.data.length} B in ${Math.round(performance.now()-t0)} ms`);
       $('#prog').style.width = `${100*(i+1)/n}%`;
       if (i < n - 1) await new Promise(r => setTimeout(r, 2200));  // let the engine drain

@@ -69,7 +69,40 @@ for this printer**, which the Android app does not use.
   * `photo`  — auto-exposure + Sierra-3 dither, for photographs
   * `text`   — hard threshold at 190
 * density 0–2 (wire 0/2/4), copies, manual feed
+* **Paper**: continuous roll or **die-cut labels**
+  * label pitch in mm, converted at 8 dots/mm (203 dpi, measured — see
+    `../docs/04-hardware-validation.md` §5.6)
+  * the preview is padded or clipped to exactly one label, and says how much
+    overflowed
+  * on labels the job ends with `1D 0C` (GS FF, advance to the next gap mark)
+    instead of the fixed `1B 4A 96` feed, which would drift out of registration
+    within a few labels
 * decoded status frames in the log (out of paper, cover open, over-heat, …)
+
+### Die-cut labels — what is and isn't verified
+
+The byte sequences are checked against the reverse-engineered protocol
+(`../docs/02-protocol.md` §3.2) by a unit test over a stubbed characteristic:
+
+```
+10 FF 10 03 02        paper type = 不干胶缝隙纸, die-cut with gaps
+10 FF 12 01 40        pitch 320 dot-lines = 40 mm, BIG-endian (the raster
+                      header GS v 0 is little-endian; this command is not)
+...raster...
+1D 0C                 GS FF, advance to the next gap mark
+10 FF FE 45           end of job
+```
+
+Continuous mode is unchanged and still ends with `1B 4A 60`. Run the test with
+`node paper.test.mjs`.
+
+**This path has not been run against real hardware** — no die-cut stock to hand.
+What is known from the APK is that the firmware answers `FE` (decoded here as
+"paper error") on a paper-type/black-mark mismatch, so a wrong pitch or plain
+roll loaded in label mode should surface in the log rather than fail silently.
+The paper type is sticky in firmware, which is why continuous is now sent
+explicitly too: a printer left in label mode hunts for gaps that plain roll
+stock does not have.
 
 ## Correctness
 

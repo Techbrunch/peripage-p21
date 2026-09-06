@@ -23,6 +23,15 @@ const CREDIT_WINDOW = 6;
 const TARGET_BPS    = 6000;
 const CREDIT_TIMEOUT = 400;   // ms; fall through to the rate cap if none arrive
 
+// Paper types -- `10 FF 10 03 <n>`, values from y6.f's paper-type dispatcher
+// (y0.h.E / y6.a.U0). See ../docs/02-protocol.md and ref/p21_iobt.py.
+export const PAPER = {
+  continuous: 1,   // 连续卷筒纸   plain roll
+  label:      2,   // 不干胶缝隙纸 die-cut, gap-separated
+  paged:      3,   // 分页纸       perforated
+  tattoo:     4,   // 纹身纸       transfer paper
+};
+
 // Status frames (from the y0.c implementations in y6.f$a)
 const STATUS = {
   'ff01': ['out of paper',   true ], 'ff02': ['cover open',     true ],
@@ -150,12 +159,43 @@ export class P21 {
 
   async feedDots(n) { await this.write(Uint8Array.from([0x1b, 0x4a, n & 0xff])); }
 
+  /** `10 FF 10 03 <n>`. Fire-and-forget, like every config command but density. */
+  async setPaperType(kind) {
+    await this.write(Uint8Array.from([0x10, 0xff, 0x10, 0x03, kind & 0xff]));
+  }
+
+  /**
+   * `10 FF 12 <hi> <lo>` -- label pitch in dot-lines, BIG-endian. Note the
+   * asymmetry: the raster header (`GS v 0`) is little-endian, this one is not.
+   */
+  async setPaperLength(dots) {
+    await this.write(Uint8Array.from([0x10, 0xff, 0x12, (dots >> 8) & 0xff, dots & 0xff]));
+  }
+
+  /**
+   * `1D 0C` (GS FF) -- advance to the next gap mark. Only meaningful on die-cut
+   * stock; on a continuous roll the firmware treats it as a short feed.
+   */
+  async formFeed() { await this.write(Uint8Array.from([0x1d, 0x0c])); }
+
+  /**
+   * Put the printer into a known paper mode before a job.
+   *
+   * Always sent, continuous included: the setting is sticky in firmware, so a
+   * printer left in label mode will hunt for gap marks that plain roll stock
+   * does not have and answer `FE` -- decoded here as "paper error".
+   */
+  async configurePaper(kind, dots = 0) {
+    await this.setPaperType(kind);
+    if (kind === PAPER.label && dots > 0) await this.setPaperLength(dots);
+  }
+
   /**
    * One print job. `data` is packed 1bpp, MSB-first.
    * End-of-job is sent on every path: an unterminated job WEDGES the printer
    * (it keeps accepting connections but stops executing, power-cycle only).
    */
-  async printRaster(data, w, h) {
+  async printRaster(data, w, h, { paper = PAPER.continuous } = {}) {
     const bpr = (w + 7) >> 3;
     const hdr = Uint8Array.from([0x1d,0x76,0x30,0x00, bpr & 255, bpr >> 8, h & 255, h >> 8]);
     const body = new Uint8Array(hdr.length + data.length);
@@ -166,7 +206,10 @@ export class P21 {
     try {
       await this.write(new Uint8Array(12));
       await this.write(body, true);                             // paced: bulk raster
-      await this.write(Uint8Array.from([0x1b,0x4a,this.feed]));
+      // On labels, hand off to the gap sensor instead of feeding a fixed 96 dots:
+      // a fixed feed drifts out of registration within a few labels.
+      if (paper === PAPER.label) await this.formFeed();
+      else await this.write(Uint8Array.from([0x1b,0x4a,this.feed]));
     } finally {
       try { await this.write(Uint8Array.from([0x10,0xff,0xfe,0x45])); } catch {}
     }
