@@ -74,8 +74,9 @@ for this printer**, which the Android app does not use.
   * panning is deliberately unclamped — you can push the image off-centre and
     leave white space, which is what you want for placing a logo on a label
 * **Image**: drag-and-drop, brightness/contrast, invert, six conversion modes
+  * `photo`    — auto-exposure + Sierra-3 dither, the default: photographs are
+    what people drop in, and a threshold turns those into a black blob
   * `sketch`   — adaptive threshold (mean − σ), best for logos and line art
-  * `photo`    — auto-exposure + Sierra-3 dither, for photographs
   * `floyd`    — Floyd–Steinberg ÷16, fine neutral grain
   * `jarvis`   — Jarvis–Judice–Ninke ÷48, holds fine detail, softer wider grain
   * `atkinson` — Atkinson ÷8, diffuses only 6/8 of the error **on purpose**, so
