@@ -231,10 +231,29 @@ export function gammaFactor(mean) {
   if (mean < 160) return 1.3;  return mean < 170 ? 1.2 : 1.0;
 }
 
-// if.b.a(): Sierra-3, divisor 32.        *  5  3
-//                              2  4  5  4  2
-//                                 2  3  2
-const SIERRA = [[1,0,5],[2,0,3],[-2,1,2],[-1,1,4],[0,1,5],[1,1,4],[2,1,2],[-1,2,2],[0,2,3],[1,2,2]];
+// Error-diffusion kernels, as [dx, dy, weight] relative to the current pixel,
+// plus the divisor. `sierra` is the app's own (if.b.a()) and is the one the
+// hardware-validated `photo` mode uses -- do not touch its numbers.
+//
+//   sierra    *  5  3        floyd       *  7        atkinson    *  1  1
+//       2  4  5  4  2            3  5  1                     1  1  1
+//          2  3  2                                              1
+const KERNELS = {
+  // if.b.a(): Sierra-3, divisor 32.
+  sierra:   { div: 32, k: [[1,0,5],[2,0,3],[-2,1,2],[-1,1,4],[0,1,5],[1,1,4],[2,1,2],[-1,2,2],[0,2,3],[1,2,2]] },
+  // Floyd-Steinberg, divisor 16. The default everywhere; fine, neutral grain.
+  floyd:    { div: 16, k: [[1,0,7],[-1,1,3],[0,1,5],[1,1,1]] },
+  // Jarvis-Judice-Ninke, divisor 48. Spreads error over 12 neighbours, so it
+  // holds fine detail better at the cost of a softer, wider grain.
+  jarvis:   { div: 48, k: [[1,0,7],[2,0,5],[-2,1,3],[-1,1,5],[0,1,7],[1,1,5],[2,1,3],
+                           [-2,2,1],[-1,2,3],[0,2,5],[1,2,3],[2,2,1]] },
+  // Atkinson, divisor 8 over 6 neighbours -- deliberately diffuses only 6/8 of
+  // the error. Throwing the remainder away is the point: highlights and
+  // shadows stay clean instead of muddying, which suits 1-bit thermal output.
+  atkinson: { div: 8,  k: [[1,0,1],[2,0,1],[-1,1,1],[0,1,1],[1,1,1],[0,2,1]] },
+};
+
+const SIERRA = KERNELS.sierra.k;   // kept for the byte-exact photo path
 
 export function toGray(imgData) {
   const { width: w, height: h, data: d } = imgData;
@@ -256,7 +275,15 @@ export function pack(bits, w, h) {
   return out;
 }
 
-export function convert(imgData, mode) {
+/**
+ * @param {ImageData} imgData
+ * @param {string} mode  'text' | 'sketch' | a key of KERNELS ('sierra' is also
+ *                       reachable as 'photo', its hardware-validated name)
+ * @param {{invert?: boolean}} [opts]  invert AFTER conversion, so the dither
+ *                       pattern is computed on the real tones and only the
+ *                       final 1-bit result is flipped
+ */
+export function convert(imgData, mode, { invert = false } = {}) {
   const w = imgData.width, h = imgData.height;
   const g = toGray(imgData);
   const bits = new Uint8Array(w * h);
@@ -274,6 +301,10 @@ export function convert(imgData, mode) {
     for (let i = 0; i < g.length; i++) bits[i] = g[i] <= thr ? 1 : 0;
     info = { mode: 'sketch', mean: mean.toFixed(1), stddev: sd.toFixed(1), threshold: thr.toFixed(1) };
   } else {
+    // Every error-diffusion mode shares this path. `photo` is Sierra-3, the
+    // byte-exact port; the others differ only in the kernel table entry.
+    const name = mode === 'photo' ? 'sierra' : mode;
+    const { div, k } = KERNELS[name] || KERNELS.sierra;
     let sum = 0; for (const v of g) sum += v;
     const mean = sum / g.length, f = gammaFactor(mean), inv = 1 / f;
     // OpenCV's convertTo() saturate-casts back to CV_8U after Core.pow, so the
@@ -288,13 +319,16 @@ export function convert(imgData, mode) {
         let err;
         if (v > 127) { err = v - 255; } else { err = v; bits[i] = 1; }
         if (!err) continue;
-        for (const [dx, dy, wt] of SIERRA) {
+        for (const [dx, dy, wt] of k) {
           const nx = x + dx, ny = y + dy;
-          if (nx >= 0 && nx < w && ny < h) buf[ny*w + nx] += Math.trunc(err * wt / 32);
+          // Integer truncation, not float: OpenCV quantises here, and matching
+          // it is what keeps `photo` byte-identical to ref/p21_iobt.py.
+          if (nx >= 0 && nx < w && ny < h) buf[ny*w + nx] += Math.trunc(err * wt / div);
         }
       }
     }
-    info = { mode: 'photo', mean: mean.toFixed(1), gamma_f: f };
+    info = { mode: mode === 'photo' ? 'photo' : name, mean: mean.toFixed(1), gamma_f: f };
   }
+  if (invert) { for (let i = 0; i < bits.length; i++) bits[i] ^= 1; info.invert = true; }
   return { data: pack(bits, w, h), bits, w, h, info };
 }

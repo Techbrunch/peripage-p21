@@ -125,9 +125,13 @@ the Android APK.</textarea>
             <div><label>Mode</label>
               <select id="mode">
                 <option value="sketch">Sketch — line art, logos (best default)</option>
-                <option value="photo">Photo — dithered, for photographs</option>
+                <option value="photo">Photo — Sierra-3 dither, for photographs</option>
+                <option value="floyd">Floyd–Steinberg — fine, neutral grain</option>
+                <option value="jarvis">Jarvis–Judice–Ninke — holds fine detail, softer</option>
+                <option value="atkinson">Atkinson — clean highlights, high contrast</option>
                 <option value="text">Text — hard threshold</option>
               </select></div>
+            <div><label><input type="checkbox" id="invert"> Invert</label></div>
           </div>
           <div class="row">
             <div><label>Brightness <span id="brVal" class="meta">0</span></label>
@@ -292,7 +296,7 @@ function update() {
     if (src.height !== target) src = fitToLabel(src, target);
   }
   const mode = tab === 'text' ? 'text' : $('#mode').value;
-  current = convert(src, mode);
+  current = convert(src, mode, { invert: tab === 'image' && $('#invert').checked });
   const { w, h, bits, info } = current;
   const c = $('#prev'); c.width = w; c.height = h;
   const g = c.getContext('2d');
@@ -311,7 +315,7 @@ function update() {
 }
 
 /* ---------------- wiring ---------------- */
-for (const id of ['#txt','#fsize','#align','#font','#bold','#wrap','#mode','#bright','#contrast'])
+for (const id of ['#txt','#fsize','#align','#font','#bold','#wrap','#mode','#invert','#bright','#contrast'])
   $(id).addEventListener('input', () => {
     $('#brVal').textContent = $('#bright').value;
     $('#ctVal').textContent = $('#contrast').value;

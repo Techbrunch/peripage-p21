@@ -64,10 +64,18 @@ for this printer**, which the Android app does not use.
   * *Wrap long lines* (on by default) reflows at the paper width, breaking a word
     wider than the line; unchecked, long lines run off the right edge and are
     silently clipped by the printer
-* **Image**: drag-and-drop, brightness/contrast, three conversion modes
-  * `sketch` — adaptive threshold, best for logos and line art
-  * `photo`  — auto-exposure + Sierra-3 dither, for photographs
-  * `text`   — hard threshold at 190
+* **Image**: drag-and-drop, brightness/contrast, invert, six conversion modes
+  * `sketch`   — adaptive threshold (mean − σ), best for logos and line art
+  * `photo`    — auto-exposure + Sierra-3 dither, for photographs
+  * `floyd`    — Floyd–Steinberg ÷16, fine neutral grain
+  * `jarvis`   — Jarvis–Judice–Ninke ÷48, holds fine detail, softer wider grain
+  * `atkinson` — Atkinson ÷8, diffuses only 6/8 of the error **on purpose**, so
+    highlights and shadows stay clean instead of muddying; high contrast
+  * `text`     — hard threshold at 190
+
+  All the diffusion modes share one loop over a kernel table (`KERNELS` in
+  `app.js`); they differ only in kernel and divisor. Invert is applied to the
+  final 1-bit result, so the dither pattern is still computed on the real tones.
 * density 0–2 (wire 0/2/4), copies, manual feed
 * **Paper**: continuous roll or **die-cut labels**
   * label pitch in mm, converted at 8 dots/mm (203 dpi, measured — see
@@ -113,6 +121,14 @@ verified by hashing the packed bitmap for a deterministic gradient through both:
 ```
 photo   04a9df3cf7ccbb9f     sketch  b9e4b97167877ea2     text  34967c2d943f7f96
 ```
+
+`sketch`, `photo` and `text` are pinned by `dither.test.mjs` (`node dither.test.mjs`),
+which hashes each mode's packed bitmap for a deterministic fixture. The kernel-table
+refactor that added the three new modes was done against those pins: all three
+hardware-validated modes are byte-identical before and after. The test also checks
+the new modes are mutually distinct, produce non-degenerate coverage (a wrong
+divisor collapses to all-black or all-white), and that invert flips every bit and
+nothing else.
 
 One subtlety that broke this at first: OpenCV's `convertTo()` saturate-casts the
 gamma result back to 8-bit *before* dithering, so the JS had to round to integers
