@@ -1,0 +1,16 @@
+{
+  // Static-assets-only Worker: no `main`, Cloudflare serves site/ directly.
+  //
+  // This file has to exist. Without it, Workers Builds falls back to automatic
+  // project configuration, which sniffed webapp/ as the site root and served the
+  // web app at / with no build step at all -- no docs, and /app/ 404ing.
+  "name": "peripage-p21",
+  "compatibility_date": "2026-09-03",
+  "assets": {
+    "directory": "./site",
+    // Zensical emits directory URLs (/02-protocol/index.html) and its own 404.
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "observability": { "enabled": true }
+}
