@@ -64,6 +64,15 @@ for this printer**, which the Android app does not use.
   * *Wrap long lines* (on by default) reflows at the paper width, breaking a word
     wider than the line; unchecked, long lines run off the right edge and are
     silently clipped by the printer
+* **Image editor**: the print frame is fixed and the image moves under it —
+  drag to pan, scroll or slider to zoom, rotate in 90° steps, Fit / Fill / Reset.
+  Everything outside the frame is dimmed, so you can see what you are cropping
+  away, and what is inside the frame is byte-for-byte what gets rasterised.
+  * *Print height* sets the frame height in mm on continuous roll; on die-cut
+    stock the frame **is** the label, so the height is taken from the label
+    pitch and the slider is disabled
+  * panning is deliberately unclamped — you can push the image off-centre and
+    leave white space, which is what you want for placing a logo on a label
 * **Image**: drag-and-drop, brightness/contrast, invert, six conversion modes
   * `sketch`   — adaptive threshold (mean − σ), best for logos and line art
   * `photo`    — auto-exposure + Sierra-3 dither, for photographs

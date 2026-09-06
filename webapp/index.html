@@ -61,6 +61,12 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .evt{color:var(--warn);font-weight:600}
 .drop{border:1.5px dashed var(--line);border-radius:var(--radius);padding:26px;text-align:center;
   color:var(--muted);cursor:pointer}
+.editor{margin-top:12px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+  background:repeating-conic-gradient(var(--line) 0 25%,transparent 0 50%) 0 0/16px 16px}
+.editor canvas{display:block;width:100%;height:auto;cursor:grab;touch-action:none}
+.editor canvas.drag{cursor:grabbing}
+.tools{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.tools button{padding:6px 11px;font-size:13px}
 .drop.over{border-color:var(--accent);color:var(--accent)}
 .note{font-size:12px;color:var(--muted);margin-top:10px}
 .bar{height:5px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:10px}
@@ -138,6 +144,24 @@ the Android APK.</textarea>
               <input type="range" id="bright" min="-100" max="100" value="0"></div>
             <div><label>Contrast <span id="ctVal" class="meta">0</span></label>
               <input type="range" id="contrast" min="-100" max="100" value="0"></div>
+          </div>
+
+          <div id="editWrap" class="hide">
+            <label>Crop — drag to move, scroll to zoom. Only what is inside the frame prints.</label>
+            <div class="editor"><canvas id="editor"></canvas></div>
+            <div class="row">
+              <div><label>Zoom <span id="zVal" class="meta">100%</span></label>
+                <input type="range" id="zoom" min="5" max="600" value="100"></div>
+              <div><label>Print height <span id="ihVal" class="meta">48 mm</span></label>
+                <input type="range" id="imgh" min="10" max="200" value="48"></div>
+            </div>
+            <div class="tools">
+              <button id="btnFit">Fit</button>
+              <button id="btnFill">Fill</button>
+              <button id="btnRotL">⟲ 90°</button>
+              <button id="btnRotR">⟳ 90°</button>
+              <button id="btnReset">Reset</button>
+            </div>
           </div>
         </div>
       </div>
@@ -253,18 +277,77 @@ function renderText() {
   return x.getImageData(0, 0, c.width, c.height);
 }
 
+/* ---------------- image viewport ----------------
+ * The print frame is fixed (paper width x chosen height) and the image moves
+ * under it: pan, zoom and 90-degree rotation. What sits inside the frame is
+ * exactly what is rasterised, so the crop needs no separate preview -- and on
+ * die-cut stock the frame IS the label.
+ */
+const view = { scale: 1, tx: 0, ty: 0, rot: 0 };
+const EDIT_MARGIN = 40;                       // dots of context drawn around the frame
+
+const printW = () => dev.width || 384;
+const printH = () => paperKind() === PAPER.label
+  ? labelDots()
+  : Math.max(8, Math.round(+$('#imgh').value * DOTS_PER_MM));
+
+// Rotating by 90 degrees swaps which source axis maps to which frame axis.
+function srcSize() {
+  const r = ((view.rot % 360) + 360) % 360, swap = r === 90 || r === 270;
+  return swap
+    ? { w: imgEl.naturalHeight, h: imgEl.naturalWidth }
+    : { w: imgEl.naturalWidth,  h: imgEl.naturalHeight };
+}
+const fitScale = how => {
+  const s = srcSize(), fx = printW() / s.w, fy = printH() / s.h;
+  return how === 'fill' ? Math.max(fx, fy) : Math.min(fx, fy);
+};
+
+/** Apply the viewport transform, with the frame's top-left at (ox, oy). */
+function applyView(x, ox, oy) {
+  x.translate(ox + printW() / 2 + view.tx, oy + printH() / 2 + view.ty);
+  x.rotate(view.rot * Math.PI / 180);
+  x.scale(view.scale, view.scale);
+  x.drawImage(imgEl, -imgEl.naturalWidth / 2, -imgEl.naturalHeight / 2);
+}
+
+const tonefilter = () => {
+  const b = +$('#bright').value, ct = +$('#contrast').value;
+  return (b || ct) ? `brightness(${100 + b}%) contrast(${100 + ct}%)` : 'none';
+};
+
 function renderImage() {
   if (!imgEl) return null;
-  const w = dev.width || 384;
-  const h = Math.max(1, Math.round(imgEl.naturalHeight * w / imgEl.naturalWidth));
+  const w = printW(), h = printH();
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const x = c.getContext('2d');
   x.fillStyle = '#fff'; x.fillRect(0, 0, w, h);
-  const b = +$('#bright').value, ct = +$('#contrast').value;
-  if (b || ct) x.filter = `brightness(${100 + b}%) contrast(${100 + ct}%)`;
-  x.drawImage(imgEl, 0, 0, w, h);
+  x.filter = tonefilter();
+  applyView(x, 0, 0);
   return x.getImageData(0, 0, w, h);
+}
+
+/** The editor draws the same transform on a larger canvas, dimming everything
+ *  outside the frame so you can see what you are cropping away. */
+function drawEditor() {
+  const cv = $('#editor');
+  if (!imgEl) return;
+  const w = printW(), h = printH(), m = EDIT_MARGIN;
+  cv.width = w + m * 2; cv.height = h + m * 2;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height);
+
+  x.save(); x.filter = tonefilter(); applyView(x, m, m); x.restore();
+
+  x.fillStyle = 'rgba(20,20,24,.55)';         // dim the four bands outside the frame
+  x.fillRect(0, 0, cv.width, m);
+  x.fillRect(0, m + h, cv.width, m);
+  x.fillRect(0, m, m, h);
+  x.fillRect(m + w, m, m, h);
+
+  x.strokeStyle = '#2f6f4f'; x.lineWidth = 2;
+  x.strokeRect(m + 1, m + 1, w - 2, h - 2);
 }
 
 // 203 dpi = 8 dots/mm, measured on hardware (docs/04-hardware-validation.md §5.6).
@@ -287,6 +370,7 @@ function fitToLabel(src, target) {
 }
 
 function update() {
+  if (tab === 'image' && imgEl) drawEditor();
   let src = tab === 'text' ? renderText() : renderImage();
   if (!src) { current = null; $('#dims').textContent = ''; $('#info').textContent = ''; return; }
   let overflow = 0;
@@ -336,14 +420,83 @@ $('#drop').addEventListener('drop', e => {
   const f = [...e.dataTransfer.files].find(f => f.type.startsWith('image/'));
   if (f) loadImage(f);
 });
+function resetView(how = 'fit') {
+  view.tx = view.ty = 0;
+  view.scale = fitScale(how);
+  $('#zoom').value = Math.round(view.scale / fitScale('fit') * 100);
+  $('#zVal').textContent = `${$('#zoom').value}%`;
+}
+
 function loadImage(file) {
   const img = new Image();
-  img.onload = () => { imgEl = img; $('#drop').textContent = `${file.name} — ${img.naturalWidth}×${img.naturalHeight}`; update(); };
+  img.onload = () => {
+    imgEl = img;
+    $('#drop').textContent = `${file.name} — ${img.naturalWidth}×${img.naturalHeight}`;
+    $('#editWrap').classList.remove('hide');
+    view.rot = 0;
+    // Default the print height to the image's own aspect, so "fit" fills the
+    // frame exactly and nothing is cropped until the user asks for it.
+    if (paperKind() !== PAPER.label) {
+      const mm = Math.round(printW() * img.naturalHeight / img.naturalWidth / DOTS_PER_MM);
+      $('#imgh').value = Math.min(200, Math.max(10, mm));
+      $('#ihVal').textContent = `${$('#imgh').value} mm`;
+    }
+    resetView('fit');
+    update();
+  };
   img.src = URL.createObjectURL(file);
 }
 
+/* ---- editor interaction ---- */
+const zoomTo = pct => {
+  view.scale = fitScale('fit') * pct / 100;
+  $('#zoom').value = Math.round(pct);
+  $('#zVal').textContent = `${Math.round(pct)}%`;
+  update();
+};
+
+$('#zoom').addEventListener('input', e => zoomTo(+e.target.value));
+$('#imgh').addEventListener('input', e => {
+  $('#ihVal').textContent = `${e.target.value} mm`;
+  update();
+});
+$('#btnFit').onclick   = () => { resetView('fit');  update(); };
+$('#btnFill').onclick  = () => { resetView('fill'); update(); };
+$('#btnReset').onclick = () => { view.rot = 0; resetView('fit'); update(); };
+$('#btnRotL').onclick  = () => { view.rot -= 90; resetView('fit'); update(); };
+$('#btnRotR').onclick  = () => { view.rot += 90; resetView('fit'); update(); };
+
+const ed = $('#editor');
+let drag = null;
+ed.addEventListener('pointerdown', e => {
+  if (!imgEl) return;
+  ed.setPointerCapture(e.pointerId);
+  ed.classList.add('drag');
+  drag = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
+});
+ed.addEventListener('pointermove', e => {
+  if (!drag) return;
+  // Pointer moves in CSS pixels; the canvas is in printer dots. Convert.
+  const k = ed.width / ed.getBoundingClientRect().width;
+  view.tx = drag.tx + (e.clientX - drag.x) * k;
+  view.ty = drag.ty + (e.clientY - drag.y) * k;
+  update();
+});
+for (const ev of ['pointerup', 'pointercancel'])
+  ed.addEventListener(ev, () => { drag = null; ed.classList.remove('drag'); });
+ed.addEventListener('wheel', e => {
+  if (!imgEl) return;
+  e.preventDefault();
+  const pct = +$('#zoom').value * (e.deltaY < 0 ? 1.1 : 1 / 1.1);
+  zoomTo(Math.min(600, Math.max(5, pct)));
+}, { passive: false });
+
 $('#paper').oninput = () => {
-  $('#labelOpts').classList.toggle('hide', paperKind() !== PAPER.label);
+  const isLabel = paperKind() === PAPER.label;
+  $('#labelOpts').classList.toggle('hide', !isLabel);
+  // On die-cut stock the frame is the label, so the height slider is not ours.
+  $('#imgh').disabled = isLabel;
+  $('#ihVal').textContent = isLabel ? 'set by label pitch' : `${$('#imgh').value} mm`;
   update();
 };
 $('#labelmm').oninput = () => {
